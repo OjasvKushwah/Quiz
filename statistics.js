@@ -106,47 +106,64 @@ function calculateAverageTime(stats) {
 function updateStatsObject(stats, questionData) {
     if (!stats || !questionData.result) return;
     
-    // Only count questions that have been checked and have a result
-    if (questionData.result === 'correct' || questionData.result === 'incorrect' || questionData.result === 'discuss') {
+    // If there was a previous result, subtract it first
+    if (questionData.previousResult) {
+        if (questionData.previousResult === 'correct') {
+            stats.correct = (stats.correct || 0) - 1;
+        } else if (questionData.previousResult === 'incorrect') {
+            stats.incorrect = (stats.incorrect || 0) - 1;
+        } else if (questionData.previousResult === 'discuss') {
+            stats.discuss = (stats.discuss || 0) - 1;
+        }
+        // Don't subtract from total since we're updating the same question
+    } else {
+        // Only increment total for new questions
         stats.total = (stats.total || 0) + 1;
-        stats.correct = (stats.correct || 0) + (questionData.result === 'correct' ? 1 : 0);
-        stats.incorrect = (stats.incorrect || 0) + (questionData.result === 'incorrect' ? 1 : 0);
-        stats.discuss = (stats.discuss || 0) + (questionData.result === 'discuss' ? 1 : 0);
-        
-        // Only add time for questions with results
-        if (questionData.timeSpent) {
-            console.log('Adding time:', questionData.timeSpent, 'for question with result:', questionData.result);
-            stats.totalTime = (stats.totalTime || 0) + questionData.timeSpent;
-        }
+    }
+    
+    // Add the new result
+    if (questionData.result === 'correct') {
+        stats.correct = (stats.correct || 0) + 1;
+    } else if (questionData.result === 'incorrect') {
+        stats.incorrect = (stats.incorrect || 0) + 1;
+    } else if (questionData.result === 'discuss') {
+        stats.discuss = (stats.discuss || 0) + 1;
+    }
 
-        // Initialize subject stats if needed
-        const subject = questionData.subject || 'Unknown';
-        if (!stats.bySubject[subject]) {
-            stats.bySubject[subject] = {
-                total: 0,
-                correct: 0,
-                incorrect: 0,
-                discuss: 0,
-                totalTime: 0
-            };
-        }
+    // Update subject stats similarly
+    const subject = questionData.subject || 'Unknown';
+    if (!stats.bySubject[subject]) {
+        stats.bySubject[subject] = {
+            total: 0,
+            correct: 0,
+            incorrect: 0,
+            discuss: 0,
+            totalTime: 0
+        };
+    }
 
-        const subjectStats = stats.bySubject[subject];
+    const subjectStats = stats.bySubject[subject];
+    
+    // Handle previous result for subject stats
+    if (questionData.previousResult) {
+        if (questionData.previousResult === 'correct') {
+            subjectStats.correct--;
+        } else if (questionData.previousResult === 'incorrect') {
+            subjectStats.incorrect--;
+        } else if (questionData.previousResult === 'discuss') {
+            subjectStats.discuss--;
+        }
+    } else {
         subjectStats.total++;
-        
-        // Only add time to subject stats if there's a valid result
-        if (questionData.timeSpent) {
-            subjectStats.totalTime = (subjectStats.totalTime || 0) + questionData.timeSpent;
-        }
+    }
 
-        // Update result counts for subject
-        if (questionData.result === 'correct') {
-            subjectStats.correct++;
-        } else if (questionData.result === 'incorrect') {
-            subjectStats.incorrect++;
-        } else if (questionData.result === 'discuss') {
-            subjectStats.discuss++;
-        }
+    // Add new result to subject stats
+    if (questionData.result === 'correct') {
+        subjectStats.correct++;
+    } else if (questionData.result === 'incorrect') {
+        subjectStats.incorrect++;
+    } else if (questionData.result === 'discuss') {
+        subjectStats.discuss++;
     }
 }
 
@@ -331,6 +348,10 @@ function loadChapterStats() {
         const checksKey = getAnswerChecksKey(subject, chapter);
         const answerChecks = JSON.parse(localStorage.getItem(checksKey) || '{}');
 
+        // Calculate average time (in minutes)
+        const totalAnswered = (stats.correct || 0) + (stats.incorrect || 0);
+        const chapterAvgTime = totalAnswered > 0 ? ((stats.totalTime / totalAnswered) / 60).toFixed(1) : 0;
+
         // Add 'Q' prefix to question numbers
         const formatQuestionNumbers = nums => nums.map(num => `Q${num}`).join(', ');
 
@@ -379,6 +400,10 @@ function loadChapterStats() {
                 <div>
                     <div class="detail-label">Accuracy</div>
                     <div class="detail-value">${calculateAccuracy(stats)}%</div>
+                </div>
+                <div>
+                    <div class="detail-label">Avg Time</div>
+                    <div class="detail-value">${chapterAvgTime}m</div>
                 </div>
             </div>
             <div class="question-details">
@@ -463,10 +488,10 @@ function updateChapterOverview(filteredStats) {
     const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
     document.getElementById('chapterAccuracy').textContent = `${accuracy}%`;
     
-    // Average Time
+    // Average Time (in minutes)
     const totalTime = stats.reduce((sum, chapterStat) => sum + (chapterStat.totalTime || 0), 0);
-    const avgTime = totalQuestions > 0 ? Math.round(totalTime / totalQuestions) : 0;
-    document.getElementById('chapterAvgTime').textContent = `${avgTime}s`;
+    const avgTime = totalAnswered > 0 ? ((totalTime / totalAnswered) / 60).toFixed(1) : 0;
+    document.getElementById('chapterAvgTime').textContent = `${avgTime}m`;
 }
 
 function createChapterPerformanceChart(filteredStats) {
